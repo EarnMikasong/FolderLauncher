@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
@@ -63,3 +64,19 @@ class FolderLauncher:
         if profile:
             return f"已启动 {command_label(entry, config)}"
         return "已打开文件夹"
+
+    def launch_action(
+        self,
+        entry: FolderEntry,
+        config: AppConfig,
+        command_id: str | None,
+        continue_session: bool = False,
+        open_explorer: bool = False,
+    ) -> str:
+        action = replace(
+            entry,
+            command_id=command_id,
+            continue_session=continue_session,
+            open_explorer=open_explorer,
+        )
+        return self.launch(action, config)

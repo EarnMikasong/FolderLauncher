@@ -43,6 +43,32 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(process_calls[0][0][0][-1], "agy --continue")
         self.assertIn("Agy --continue", message)
 
+    def test_quick_action_overrides_default_without_mutating_entry(self) -> None:
+        process_calls: list[tuple[tuple, dict]] = []
+
+        def fake_popen(*args, **kwargs):
+            process_calls.append((args, kwargs))
+            return object()
+
+        with tempfile.TemporaryDirectory() as directory:
+            entry = FolderEntry("folder", "Project", directory, "category")
+            config = AppConfig(
+                categories=[Category("category", "Work")],
+                commands=[CommandProfile("claude", "Claude", "claude", supports_continue=True)],
+                folders=[entry],
+            )
+            FolderLauncher(lambda _path: None, fake_popen).launch_action(
+                entry,
+                config,
+                command_id="claude",
+                continue_session=True,
+                open_explorer=False,
+            )
+
+        self.assertEqual(process_calls[0][0][0][-1], "claude --continue")
+        self.assertIsNone(entry.command_id)
+        self.assertFalse(entry.continue_session)
+
 
 if __name__ == "__main__":
     unittest.main()
