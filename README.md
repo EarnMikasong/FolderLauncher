@@ -1,6 +1,6 @@
 # Folder Launcher
 
-一个面向 Windows 的键盘优先文件夹启动器。它替代原来的 PowerShell 编号菜单，用图形界面管理常用目录，并能在指定目录中启动 Claude、Agy 或用户自定义命令。
+一个面向 Windows 的键盘优先文件夹启动器。它替代原来的 PowerShell 编号菜单，用现代图形界面管理常用目录，并能在指定目录中启动 Claude、Agy 或用户自定义命令。
 
 ## 主要功能
 
@@ -21,6 +21,7 @@
 
 ```powershell
 cd folder-launcher
+python -m pip install -r requirements.txt
 pythonw app.py
 ```
 
@@ -88,10 +89,10 @@ D:\其他工作目录
 
 ## 构建 EXE
 
-本机需要 Python 3.10 或更高版本以及 PyInstaller。双击 `build.bat`，或执行：
+本机需要 Python 3.10 或更高版本、CustomTkinter 以及 PyInstaller。双击 `build.bat`，或执行：
 
 ```powershell
-python -m PyInstaller --noconfirm --clean --onefile --windowed --name FolderLauncher app.py
+python -m PyInstaller --noconfirm --clean --onefile --windowed --collect-all customtkinter --name FolderLauncher app.py
 ```
 
 输出文件：
@@ -122,6 +123,7 @@ folder-launcher/
 │  ├─ models.py                  配置数据模型
 │  └─ ui.py                      Tkinter 图形界面
 ├─ tests/                         核心逻辑测试
+├─ requirements.txt              界面依赖
 ├─ build.bat                      Windows 打包脚本
 └─ README.md
 ```
