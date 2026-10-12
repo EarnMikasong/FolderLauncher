@@ -11,6 +11,7 @@ from .hierarchy import FolderNode, build_category_tree, normalized, suggest_cate
 from .launcher import FolderLauncher, LaunchError, command_label
 from .dialogs import FolderEditor, ManagerDialog
 from .models import AppConfig, Category, FolderEntry
+from .search import search_folders
 
 
 PAGE_SIZE = 7
@@ -44,6 +45,8 @@ class FolderLauncherApp(ctk.CTk):
         self.navigation: list[tuple[str, str | None]] = [("home", None)]
         self.page = 0
         self.selected_folder_id: str | None = None
+        self.search_query = ""
+        self.row_widgets: dict[str, ctk.CTkFrame] = {}
         self.path_var = tk.StringVar()
         self.status_var = tk.StringVar(value="就绪")
         self.open_with_command_var = tk.BooleanVar(value=False)
@@ -67,6 +70,8 @@ class FolderLauncherApp(ctk.CTk):
         self._build_main()
         self._build_actions()
         self.bind_all("<Key>", self._handle_key, add="+")
+        self.bind_all("<Control-k>", lambda _event: self.search_entry.focus_set())
+        self.bind_all("<Control-K>", lambda _event: self.search_entry.focus_set())
         self.render()
 
     def _load_config(self) -> AppConfig:
@@ -170,6 +175,23 @@ class FolderLauncherApp(ctk.CTk):
             anchor="w",
         )
         self.breadcrumb_label.grid(row=1, column=1, sticky="ew", pady=(2, 0))
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", lambda *_: self._on_search_change())
+        self.search_entry = ctk.CTkEntry(
+            header,
+            textvariable=self.search_var,
+            width=250,
+            height=36,
+            corner_radius=6,
+            fg_color=COLORS["surface"],
+            border_width=1,
+            border_color=COLORS["line"],
+            placeholder_text="搜索文件夹  Ctrl+K",
+            font=ctk.CTkFont("Segoe UI", 11),
+        )
+        self.search_entry.grid(row=0, column=2, rowspan=2, sticky="e")
+        self.search_entry.bind("<Return>", self._on_search_return)
+        self.search_entry.bind("<Escape>", self._on_search_escape)
 
         add_bar = ctk.CTkFrame(
             self.main,
@@ -430,6 +452,8 @@ class FolderLauncherApp(ctk.CTk):
         return self.navigation[-1]
 
     def _current_items(self) -> list[Category | FolderNode]:
+        if self.search_query:
+            return [FolderNode(entry=entry, children=[]) for entry in search_folders(self.config_data, self.search_query)]
         view, identifier = self._current()
         if view == "home":
             return list(self.config_data.categories)
@@ -477,11 +501,15 @@ class FolderLauncherApp(ctk.CTk):
     def render(self) -> None:
         for child in self.content.winfo_children():
             child.destroy()
+        self.row_widgets.clear()
         view, identifier = self._current()
-        title, breadcrumb = self._view_heading(view, identifier)
+        searching = bool(self.search_query)
+        if searching:
+            title, breadcrumb = "搜索", f"工作区 / 搜索「{self.search_query}」"
+        else:
+            title, breadcrumb = self._view_heading(view, identifier)
         self.title_label.configure(text=title)
         self.breadcrumb_label.configure(text=breadcrumb)
-        self.section_label.configure(text="分类" if view == "home" else "目录")
         self.back_button.configure(state="normal" if len(self.navigation) > 1 else "disabled")
         if view == "folder" and identifier:
             self.selected_folder_id = identifier
@@ -491,13 +519,19 @@ class FolderLauncherApp(ctk.CTk):
                 self.selected_folder_id = None
 
         items = self._current_items()
-        max_page = max(0, (len(items) - 1) // PAGE_SIZE)
-        self.page = min(self.page, max_page)
-        visible = items[self.page * PAGE_SIZE : (self.page + 1) * PAGE_SIZE]
+        if searching:
+            self.page = 0
+            visible = items
+            max_page = 0
+        else:
+            max_page = max(0, (len(items) - 1) // PAGE_SIZE)
+            self.page = min(self.page, max_page)
+            visible = items[self.page * PAGE_SIZE : (self.page + 1) * PAGE_SIZE]
         if not visible:
+            empty_text = f"没有匹配「{self.search_query}」的文件夹，按 Esc 返回" if searching else "暂无内容"
             ctk.CTkLabel(
                 self.content,
-                text="暂无内容",
+                text=empty_text,
                 text_color=COLORS["muted"],
                 font=ctk.CTkFont("Microsoft YaHei UI", 12),
             ).grid(row=0, column=0, sticky="ew", pady=90)
@@ -505,12 +539,53 @@ class FolderLauncherApp(ctk.CTk):
             for index, item in enumerate(visible, start=1):
                 self._render_row(index, item)
 
-        pages = max_page + 1
-        self.page_label.configure(text=f"{self.page + 1} / {pages}" if pages > 1 else "")
-        self.previous_button.configure(state="normal" if self.page > 0 else "disabled")
-        self.next_button.configure(state="normal" if self.page < max_page else "disabled")
+        if searching:
+            self.section_label.configure(text=f"搜索结果 · {len(items)} 个文件夹")
+            self.page_label.configure(text="")
+            self.previous_button.configure(state="disabled")
+            self.next_button.configure(state="disabled")
+        else:
+            self.section_label.configure(text="分类" if view == "home" else "目录")
+            pages = max_page + 1
+            self.page_label.configure(text=f"{self.page + 1} / {pages}" if pages > 1 else "")
+            self.previous_button.configure(state="normal" if self.page > 0 else "disabled")
+            self.next_button.configure(state="normal" if self.page < max_page else "disabled")
         self._refresh_sidebar()
         self._update_actions()
+
+    def _visible_items(self) -> list[Category | FolderNode]:
+        items = self._current_items()
+        if self.search_query:
+            return items
+        return items[self.page * PAGE_SIZE : (self.page + 1) * PAGE_SIZE]
+
+    def _clear_search(self) -> None:
+        self.search_var.set("")
+        self.search_query = ""
+
+    def _on_search_change(self) -> None:
+        self.search_query = self.search_var.get().strip()
+        self.page = 0
+        self.render()
+
+    def _on_search_return(self, _event: tk.Event) -> None:
+        nodes = [item for item in self._current_items() if isinstance(item, FolderNode)]
+        entry = next((node.entry for node in nodes if node.entry.id == self.selected_folder_id), None)
+        if entry is None and nodes:
+            entry = nodes[0].entry
+        if entry is None:
+            self.status_var.set("无匹配结果")
+            return
+        self.selected_folder_id = entry.id
+        self._launch_entry(entry)
+        self.render()
+
+    def _on_search_escape(self, _event: tk.Event) -> None:
+        if self.search_var.get().strip():
+            self._clear_search()
+            self.focus_set()
+        else:
+            self.go_back()
 
     def _view_heading(self, view: str, identifier: str | None) -> tuple[str, str]:
         if view == "home":
@@ -556,8 +631,13 @@ class FolderLauncherApp(ctk.CTk):
         else:
             name = item.entry.name
             detail = item.entry.path
-            badge = f"默认 · {command_label(item.entry, self.config_data)}"
-            action = "进入" if item.children else "运行"
+            if self.search_query:
+                category = self.config_data.category(item.entry.category_id)
+                badge = category.name if category else "文件夹"
+                action = "运行"
+            else:
+                badge = f"默认 · {command_label(item.entry, self.config_data)}"
+                action = "进入" if item.children else "运行"
         name_label = ctk.CTkLabel(
             row,
             text=name,
@@ -597,10 +677,62 @@ class FolderLauncherApp(ctk.CTk):
             command=lambda selected_item=item: self._run_row_action(selected_item),
         )
         action_button.grid(row=0, column=3, rowspan=2, padx=(0, 12), pady=18)
+        row.configure(cursor="hand2")
+        if isinstance(item, FolderNode):
+            self.row_widgets[item.entry.id] = row
         for widget in (row, number, name_label, detail_label, badge_label):
             widget.bind("<Button-1>", lambda _event, selected_item=item: self.activate_item(selected_item))
             if isinstance(item, FolderNode) and not item.children:
                 widget.bind("<Double-1>", lambda _event, entry=item.entry: self._launch_entry(entry))
+            if not selected:
+                widget.bind("<Enter>", lambda _event, target=row: self._set_row_hover(target, True))
+                widget.bind("<Leave>", lambda _event, target=row: self._set_row_hover(target, False))
+
+    def _set_row_hover(self, row: ctk.CTkFrame, hover: bool) -> None:
+        try:
+            row.configure(
+                fg_color=COLORS["surface_alt"] if hover else COLORS["surface"],
+                border_color="#C3D3D8" if hover else COLORS["line"],
+            )
+        except tk.TclError:
+            pass
+
+    def _ensure_visible(self, key: str) -> None:
+        try:
+            row = self.row_widgets.get(key)
+            if row is None:
+                return
+            self.content.update_idletasks()
+            canvas = getattr(self.content, "_parent_canvas", None)
+            if canvas is None:
+                return
+            bounds = canvas.bbox("all")
+            if not bounds:
+                return
+            total_height = bounds[3]
+            if total_height <= 0:
+                return
+            fraction = row.winfo_y() / total_height
+            canvas.yview_moveto(max(0.0, min(1.0, fraction)))
+        except Exception:
+            pass
+
+    def _move_selection(self, keysym: str) -> None:
+        nodes = [item for item in self._visible_items() if isinstance(item, FolderNode)]
+        if not nodes:
+            return
+        current = next((index for index, node in enumerate(nodes) if node.entry.id == self.selected_folder_id), None)
+        if keysym == "Home":
+            target = 0
+        elif keysym == "End":
+            target = len(nodes) - 1
+        elif keysym == "Up":
+            target = 0 if current is None else max(0, current - 1)
+        else:
+            target = 0 if current is None else min(len(nodes) - 1, current + 1)
+        self.selected_folder_id = nodes[target].entry.id
+        self.render()
+        self._ensure_visible(self.selected_folder_id)
 
     def _run_row_action(self, item: Category | FolderNode) -> None:
         if isinstance(item, Category) or item.children:
@@ -611,6 +743,7 @@ class FolderLauncherApp(ctk.CTk):
         self.render()
 
     def activate_item(self, item: Category | FolderNode) -> None:
+        self._clear_search()
         self.page = 0
         if isinstance(item, Category):
             self.open_category(item)
@@ -623,18 +756,21 @@ class FolderLauncherApp(ctk.CTk):
             self.render()
 
     def open_category(self, category: Category) -> None:
+        self._clear_search()
         self.navigation = [("home", None), ("category", category.id)]
         self.selected_folder_id = None
         self.page = 0
         self.render()
 
     def go_home(self) -> None:
+        self._clear_search()
         self.navigation = [("home", None)]
         self.selected_folder_id = None
         self.page = 0
         self.render()
 
     def go_back(self) -> None:
+        self._clear_search()
         if len(self.navigation) > 1:
             self.navigation.pop()
             view, identifier = self._current()
@@ -728,11 +864,13 @@ class FolderLauncherApp(ctk.CTk):
             self.edit_folder(entry)
 
     def _handle_key(self, event: tk.Event) -> None:
+        if self.grab_current() is not None:
+            return
         if event.widget and event.widget.winfo_class() in {"Entry", "Text", "TEntry", "TCombobox", "Spinbox"}:
             return
         if event.char and event.char in "123456789":
             index = int(event.char) - 1
-            items = self._current_items()[self.page * PAGE_SIZE : (self.page + 1) * PAGE_SIZE]
+            items = self._current_items()[:9] if self.search_query else self._visible_items()
             if index < len(items):
                 item = items[index]
                 if isinstance(item, FolderNode) and not item.children:
@@ -749,6 +887,8 @@ class FolderLauncherApp(ctk.CTk):
             self.change_page(1)
         elif event.keysym in {"Prior", "Left"}:
             self.change_page(-1)
+        elif event.keysym in {"Up", "Down", "Home", "End"}:
+            self._move_selection(event.keysym)
 
     def choose_folder(self) -> None:
         path = filedialog.askdirectory(parent=self, title="选择文件夹")
