@@ -20,6 +20,7 @@ COLORS = {
     "sidebar": "#17313B",
     "sidebar_hover": "#294B56",
     "sidebar_selected": "#E5F1EE",
+    "sidebar_muted": "#87A0A9",
     "surface": "#FFFFFF",
     "surface_alt": "#F6F8F9",
     "line": "#DCE2E6",
@@ -28,6 +29,7 @@ COLORS = {
     "accent": "#0B766B",
     "accent_hover": "#095F57",
     "accent_soft": "#E1F1EE",
+    "accent_bright": "#4FB3A6",
     "blue": "#346B9B",
     "blue_hover": "#28587F",
     "claude": "#B85F3A",
@@ -98,12 +100,17 @@ class FolderLauncherApp(ctk.CTk):
         ctk.CTkLabel(
             self.sidebar,
             text="WORKSPACE LAUNCHER",
-            text_color="#87A0A9",
+            text_color=COLORS["sidebar_muted"],
             font=ctk.CTkFont("Segoe UI", 9, "bold"),
             anchor="w",
         ).grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 22))
+        self.home_row = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        self.home_row.grid(row=2, column=0, sticky="ew", padx=12)
+        self.home_row.grid_columnconfigure(1, weight=1)
+        self.home_indicator = ctk.CTkFrame(self.home_row, width=3, corner_radius=0, fg_color="transparent")
+        self.home_indicator.grid(row=0, column=0, sticky="ns")
         self.home_button = ctk.CTkButton(
-            self.sidebar,
+            self.home_row,
             text="全部分类",
             height=40,
             corner_radius=6,
@@ -111,10 +118,10 @@ class FolderLauncherApp(ctk.CTk):
             fg_color="transparent",
             hover_color=COLORS["sidebar_hover"],
             text_color="#E4EEF0",
-            font=ctk.CTkFont("Microsoft YaHei UI", 12, "bold"),
+            font=ctk.CTkFont("Microsoft YaHei UI", 12),
             command=self.go_home,
         )
-        self.home_button.grid(row=2, column=0, sticky="ew", padx=12)
+        self.home_button.grid(row=0, column=1, sticky="ew")
         self.category_sidebar = ctk.CTkScrollableFrame(
             self.sidebar,
             fg_color="transparent",
@@ -238,12 +245,6 @@ class FolderLauncherApp(ctk.CTk):
             anchor="w",
         )
         self.section_label.grid(row=0, column=0, sticky="ew")
-        ctk.CTkLabel(
-            list_header,
-            text="数字键执行默认动作",
-            text_color="#87939A",
-            font=ctk.CTkFont("Microsoft YaHei UI", 9),
-        ).grid(row=0, column=1)
         self.content = ctk.CTkScrollableFrame(
             self.main,
             fg_color="transparent",
@@ -257,13 +258,22 @@ class FolderLauncherApp(ctk.CTk):
         footer = ctk.CTkFrame(self.main, fg_color="transparent")
         footer.grid(row=4, column=0, sticky="ew", pady=(10, 0))
         footer.grid_columnconfigure(0, weight=1)
+        status_row = ctk.CTkFrame(footer, fg_color="transparent")
+        status_row.grid(row=0, column=0, sticky="ew")
+        status_row.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(
-            footer,
+            status_row,
             textvariable=self.status_var,
             text_color=COLORS["muted"],
             font=ctk.CTkFont("Microsoft YaHei UI", 9),
             anchor="w",
         ).grid(row=0, column=0, sticky="ew")
+        ctk.CTkLabel(
+            status_row,
+            text="↑↓ 选择 · Enter 打开 · Esc 返回 · Ctrl+K 搜索",
+            text_color=COLORS["muted"],
+            font=ctk.CTkFont("Microsoft YaHei UI", 9),
+        ).grid(row=0, column=1, sticky="e", padx=(12, 12))
         self.previous_button = self._pager_button(footer, "←", -1)
         self.previous_button.grid(row=0, column=1, padx=(8, 5))
         self.page_label = ctk.CTkLabel(footer, text="", width=44, text_color=COLORS["muted"])
@@ -283,32 +293,41 @@ class FolderLauncherApp(ctk.CTk):
             font=ctk.CTkFont("Microsoft YaHei UI", 14, "bold"),
             anchor="w",
         ).grid(row=0, column=0, sticky="ew", padx=22, pady=(25, 0))
+        self.selected_card = ctk.CTkFrame(self.actions, fg_color="transparent", corner_radius=8)
+        self.selected_card.grid(row=1, column=0, sticky="ew", padx=22, pady=(22, 4))
+        self.selected_card.grid_columnconfigure(0, weight=1)
         self.selected_name_label = ctk.CTkLabel(
-            self.actions,
+            self.selected_card,
             text="未选择目录",
             text_color=COLORS["text"],
-            font=ctk.CTkFont("Microsoft YaHei UI", 18, "bold"),
+            font=ctk.CTkFont("Microsoft YaHei UI", 15, "bold"),
             anchor="w",
         )
-        self.selected_name_label.grid(row=1, column=0, sticky="ew", padx=22, pady=(22, 2))
+        self.selected_name_label.grid(row=0, column=0, sticky="ew", padx=10, pady=(12, 2))
+        path_row = ctk.CTkFrame(self.selected_card, fg_color="transparent")
+        path_row.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 4))
+        path_row.grid_columnconfigure(0, weight=1)
         self.selected_path_label = ctk.CTkLabel(
-            self.actions,
+            path_row,
             text="-",
             text_color=COLORS["muted"],
             font=ctk.CTkFont("Segoe UI", 9),
             anchor="w",
             justify="left",
-            wraplength=258,
+            wraplength=176,
         )
-        self.selected_path_label.grid(row=2, column=0, sticky="ew", padx=22)
+        self.selected_path_label.grid(row=0, column=0, sticky="ew")
+        self.copy_path_button = self._small_button(path_row, "复制路径", self._copy_selected_path, 64)
+        self.copy_path_button.configure(height=28)
+        self.copy_path_button.grid(row=0, column=1, padx=(8, 0))
         self.selected_default_label = ctk.CTkLabel(
-            self.actions,
+            self.selected_card,
             text="默认动作  -",
             text_color=COLORS["accent"],
             font=ctk.CTkFont("Microsoft YaHei UI", 10, "bold"),
             anchor="w",
         )
-        self.selected_default_label.grid(row=3, column=0, sticky="ew", padx=22, pady=(7, 16))
+        self.selected_default_label.grid(row=2, column=0, sticky="ew", padx=10, pady=(7, 12))
 
         self.open_folder_button = self._action_button(
             4, "打开文件夹", COLORS["accent"], COLORS["accent_hover"], lambda: self._launch_quick(None, False, True)
@@ -413,7 +432,7 @@ class FolderLauncherApp(ctk.CTk):
         self.save_default_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
         self.edit_selected_button = self._small_button(settings, "编辑目录", self._edit_selected)
         self.edit_selected_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
-        self.action_widgets.extend([self.open_folder_button, self.save_default_button, self.edit_selected_button])
+        self.action_widgets.extend([self.open_folder_button, self.save_default_button, self.edit_selected_button, self.copy_path_button])
 
     @staticmethod
     def _small_button(parent: tk.Misc, text: str, command, width: int = 74) -> ctk.CTkButton:
@@ -480,12 +499,24 @@ class FolderLauncherApp(ctk.CTk):
         for child in self.category_sidebar.winfo_children():
             child.destroy()
         view, identifier = self._current()
-        self.home_button.configure(fg_color=COLORS["sidebar_hover"] if view == "home" else "transparent")
+        home_active = view == "home"
+        self.home_indicator.configure(fg_color=COLORS["accent_bright"] if home_active else "transparent")
+        self.home_button.configure(
+            fg_color=COLORS["sidebar_hover"] if home_active else "transparent",
+            text_color="#FFFFFF" if home_active else "#E4EEF0",
+            font=ctk.CTkFont("Microsoft YaHei UI", 12, "bold" if home_active else "normal"),
+        )
         current_folder = self.config_data.folder(identifier or "") if view == "folder" else None
         for index, category in enumerate(self.config_data.categories, start=1):
             selected = identifier == category.id or (current_folder is not None and current_folder.category_id == category.id)
+            count = sum(1 for folder in self.config_data.folders if folder.category_id == category.id)
+            row = ctk.CTkFrame(self.category_sidebar, fg_color="transparent")
+            row.grid(row=index - 1, column=0, sticky="ew", pady=2)
+            row.grid_columnconfigure(1, weight=1)
+            indicator = ctk.CTkFrame(row, width=3, corner_radius=0, fg_color=COLORS["accent_bright"] if selected else "transparent")
+            indicator.grid(row=0, column=0, sticky="ns")
             button = ctk.CTkButton(
-                self.category_sidebar,
+                row,
                 text=f"{index}   {category.name}",
                 height=38,
                 corner_radius=6,
@@ -496,7 +527,15 @@ class FolderLauncherApp(ctk.CTk):
                 font=ctk.CTkFont("Microsoft YaHei UI", 10, "bold" if selected else "normal"),
                 command=lambda item=category: self.open_category(item),
             )
-            button.grid(row=index - 1, column=0, sticky="ew", pady=2)
+            button.grid(row=0, column=1, sticky="ew")
+            count_label = ctk.CTkLabel(
+                row,
+                text=str(count),
+                text_color=COLORS["sidebar_selected"] if selected else COLORS["sidebar_muted"],
+                font=ctk.CTkFont("Segoe UI", 9),
+            )
+            count_label.grid(row=0, column=2, padx=(4, 8))
+            count_label.bind("<Button-1>", lambda _event, item=category: self.open_category(item))
 
     def render(self) -> None:
         for child in self.content.winfo_children():
@@ -528,12 +567,19 @@ class FolderLauncherApp(ctk.CTk):
             self.page = min(self.page, max_page)
             visible = items[self.page * PAGE_SIZE : (self.page + 1) * PAGE_SIZE]
         if not visible:
-            empty_text = f"没有匹配「{self.search_query}」的文件夹，按 Esc 返回" if searching else "暂无内容"
+            if searching:
+                empty_text = f"没有匹配「{self.search_query}」的文件夹，按 Esc 返回"
+            elif not self.config_data.folders:
+                empty_text = "还没有添加文件夹——在上方粘贴路径后回车，或点击「浏览」"
+            else:
+                empty_text = "这个分类还没有文件夹——点击左上角返回，或在上方添加"
             ctk.CTkLabel(
                 self.content,
                 text=empty_text,
                 text_color=COLORS["muted"],
                 font=ctk.CTkFont("Microsoft YaHei UI", 12),
+                wraplength=560,
+                justify="center",
             ).grid(row=0, column=0, sticky="ew", pady=90)
         else:
             for index, item in enumerate(visible, start=1):
@@ -712,8 +758,15 @@ class FolderLauncherApp(ctk.CTk):
             total_height = bounds[3]
             if total_height <= 0:
                 return
-            fraction = row.winfo_y() / total_height
-            canvas.yview_moveto(max(0.0, min(1.0, fraction)))
+            viewport = canvas.winfo_height()
+            if viewport <= 0:
+                return
+            top = row.winfo_rooty() - canvas.winfo_rooty()
+            bottom = top + row.winfo_height()
+            if bottom > viewport:
+                canvas.yview_moveto(max(0.0, min(1.0, (bottom - viewport + 8) / total_height)))
+            elif top < 0:
+                canvas.yview_moveto(max(0.0, min(1.0, (top - 8) / total_height)))
         except Exception:
             pass
 
@@ -743,7 +796,8 @@ class FolderLauncherApp(ctk.CTk):
         self.render()
 
     def activate_item(self, item: Category | FolderNode) -> None:
-        self._clear_search()
+        if isinstance(item, Category) or item.children:
+            self._clear_search()
         self.page = 0
         if isinstance(item, Category):
             self.open_category(item)
@@ -781,9 +835,23 @@ class FolderLauncherApp(ctk.CTk):
     def change_page(self, offset: int) -> None:
         self.page = max(0, self.page + offset)
         self.render()
+        try:
+            canvas = getattr(self.content, "_parent_canvas", None)
+            if canvas is not None:
+                canvas.yview_moveto(0)
+        except Exception:
+            pass
 
     def _selected_entry(self) -> FolderEntry | None:
         return self.config_data.folder(self.selected_folder_id) if self.selected_folder_id else None
+
+    def _copy_selected_path(self) -> None:
+        entry = self._selected_entry()
+        if not entry:
+            return
+        self.clipboard_clear()
+        self.clipboard_append(entry.path)
+        self.status_var.set("已复制路径")
 
     def _update_actions(self) -> None:
         self.default_actions = {"仅打开文件夹": (None, False)}
@@ -808,14 +876,27 @@ class FolderLauncherApp(ctk.CTk):
         self.default_action_menu.configure(state=state)
         self.open_with_switch.configure(state=state)
         if not entry:
-            self.selected_name_label.configure(text="未选择目录")
-            self.selected_path_label.configure(text="-")
-            self.selected_default_label.configure(text="默认动作  -")
+            self.selected_card.configure(fg_color="transparent")
+            self.selected_name_label.configure(
+                text="从左侧列表选择一个文件夹",
+                text_color=COLORS["muted"],
+                font=ctk.CTkFont("Microsoft YaHei UI", 13),
+            )
+            self.selected_path_label.configure(text="也可按 Ctrl+K 搜索")
+            self.selected_default_label.grid_remove()
+            self.copy_path_button.grid_remove()
             self.default_action_var.set("仅打开文件夹")
             self.open_with_command_var.set(False)
             return
-        self.selected_name_label.configure(text=entry.name)
+        self.selected_card.configure(fg_color=COLORS["surface_alt"])
+        self.selected_name_label.configure(
+            text=entry.name,
+            text_color=COLORS["text"],
+            font=ctk.CTkFont("Microsoft YaHei UI", 15, "bold"),
+        )
         self.selected_path_label.configure(text=entry.path)
+        self.selected_default_label.grid()
+        self.copy_path_button.grid()
         self.selected_default_label.configure(text=f"默认动作  {command_label(entry, self.config_data)}")
         self.open_with_command_var.set(entry.open_explorer if entry.command_id else False)
         self.default_action_var.set(
